@@ -5,3 +5,6 @@ asistencia.db
 .vs/
 *.suo
 .DS_Store
+*.log
+.server.*
+App_Data/

@@ -1,0 +1,7 @@
+run = "dotnet run --project AsistenciaColegio.csproj --urls http://0.0.0.0:5217"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "dotnet run --project AsistenciaColegio.csproj --urls http://0.0.0.0:$PORT"]
