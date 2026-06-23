@@ -1,0 +1,7 @@
+bin/
+obj/
+asistencia.db
+*.user
+.vs/
+*.suo
+.DS_Store
