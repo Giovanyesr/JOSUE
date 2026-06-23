@@ -1,23 +1,21 @@
 using AsistenciaColegio.Data;
 using AsistenciaColegio.Models;
 using AsistenciaColegio.Services;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.FileProviders;
 
 namespace AsistenciaColegio.Tests;
 
 public sealed class DatabaseTests : IDisposable
 {
-    private readonly string _tempDir;
+    private readonly string _schema;
     private readonly Database _db;
-    private readonly PasswordService _passwords;
+    private readonly PasswordService _passwords = new();
 
     public DatabaseTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _passwords = new PasswordService();
-        _db = new Database(new FakeEnvironment(_tempDir), _passwords);
+        _schema = "test_" + Guid.NewGuid().ToString("N")[..12];
+        var connString = GetConnectionString() + $";Search Path={_schema}";
+        _db = new Database(connString, _passwords);
+        ExecuteRaw($"CREATE SCHEMA IF NOT EXISTS {_schema}");
         _db.Initialize();
     }
 
@@ -101,16 +99,21 @@ public sealed class DatabaseTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { }
+        try { ExecuteRaw($"DROP SCHEMA IF EXISTS {_schema} CASCADE"); } catch { }
     }
 
-    private sealed class FakeEnvironment(string rootPath) : IWebHostEnvironment
+    private void ExecuteRaw(string sql)
     {
-        public string WebRootPath { get => rootPath; set { } }
-        public string ContentRootPath { get => rootPath; set { } }
-        public string EnvironmentName { get => "Testing"; set { } }
-        public string ApplicationName { get => "Test"; set { } }
-        public IFileProvider WebRootFileProvider { get => new NullFileProvider(); set { } }
-        public IFileProvider ContentRootFileProvider { get => new NullFileProvider(); set { } }
+        using var conn = new Npgsql.NpgsqlConnection(GetConnectionString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private static string GetConnectionString()
+    {
+        return Environment.GetEnvironmentVariable("SUPABASE_TEST_CONNECTION_STRING")
+            ?? "Host=localhost;Port=5432;Database=asistencia_test;Username=testuser;Password=testpass";
     }
 }

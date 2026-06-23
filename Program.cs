@@ -14,6 +14,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
+var supabaseConnectionString = builder.Configuration.GetConnectionString("Supabase")
+    ?? Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING")
+    ?? throw new InvalidOperationException("Supabase connection string is required. Set ConnectionStrings:Supabase in appsettings.json or SUPABASE_CONNECTION_STRING env var.");
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "App_Data", "Keys")));
 builder.Services
@@ -51,7 +54,7 @@ builder.Services.AddRateLimiter(options =>
             }));
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
-builder.Services.AddSingleton<Database>();
+builder.Services.AddSingleton<Database>(sp => new Database(supabaseConnectionString, sp.GetRequiredService<PasswordService>()));
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddSingleton<AttendanceService>();
 builder.Services.AddSingleton<ReportService>();

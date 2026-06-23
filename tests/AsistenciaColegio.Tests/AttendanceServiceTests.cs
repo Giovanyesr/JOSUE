@@ -1,24 +1,29 @@
 using AsistenciaColegio.Data;
 using AsistenciaColegio.Models;
 using AsistenciaColegio.Services;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.FileProviders;
 
 namespace AsistenciaColegio.Tests;
 
 public sealed class AttendanceServiceTests : IDisposable
 {
-    private readonly string _tempDir;
+    private readonly string _schema;
     private readonly Database _db;
     private readonly AttendanceService _service;
     private readonly int _studentId;
 
     public AttendanceServiceTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
+        _schema = "test_" + Guid.NewGuid().ToString("N")[..12];
+        var connString = GetConnectionString() + $";Search Path={_schema}";
         var passwords = new PasswordService();
-        _db = new Database(new FakeEnvironment(_tempDir), passwords);
+        using (var conn = new Npgsql.NpgsqlConnection(GetConnectionString()))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"CREATE SCHEMA IF NOT EXISTS {_schema}";
+            cmd.ExecuteNonQuery();
+        }
+        _db = new Database(connString, passwords);
         _db.Initialize();
         _db.UpdateConfiguration("TEST2026", new TimeOnly(7, 0), new TimeOnly(17, 0), 15);
         _studentId = _db.CreateStudent(new StudentCreateRequest("Test", "Student A", "11111111", "teststu", "pass"), passwords.Hash("pass"));
@@ -56,16 +61,20 @@ public sealed class AttendanceServiceTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { }
+        try
+        {
+            using var conn = new Npgsql.NpgsqlConnection(GetConnectionString());
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"DROP SCHEMA IF EXISTS {_schema} CASCADE";
+            cmd.ExecuteNonQuery();
+        }
+        catch { }
     }
 
-    private sealed class FakeEnvironment(string rootPath) : IWebHostEnvironment
+    private static string GetConnectionString()
     {
-        public string WebRootPath { get => rootPath; set { } }
-        public string ContentRootPath { get => rootPath; set { } }
-        public string EnvironmentName { get => "Testing"; set { } }
-        public string ApplicationName { get => "Test"; set { } }
-        public IFileProvider WebRootFileProvider { get => new NullFileProvider(); set { } }
-        public IFileProvider ContentRootFileProvider { get => new NullFileProvider(); set { } }
+        return Environment.GetEnvironmentVariable("SUPABASE_TEST_CONNECTION_STRING")
+            ?? "Host=localhost;Port=5432;Database=asistencia_test;Username=testuser;Password=testpass";
     }
 }
